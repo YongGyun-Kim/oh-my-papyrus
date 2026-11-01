@@ -64,7 +64,11 @@ class InputService:
                 if record["input_state"] not in ("recording", "uploading"):
                     raise InputConflict("input_closed", "이미 종료된 녹음입니다")
                 if record["byte_count"] + len(body) > self.settings.max_upload_bytes:
-                    raise ApiError("input_too_large", "파일은 최대 1GB까지 가져올 수 있습니다", 413)
+                    raise ApiError(
+                        "input_too_large",
+                        "업로드 용량 제한을 넘었어요. 더 작은 파일을 선택해 주세요.",
+                        413,
+                    )
                 path = self.storage.directory(recording_id) / "chunks" / f"{sequence:06d}.bin"
                 atomic_write(path, body)
                 connection.execute(

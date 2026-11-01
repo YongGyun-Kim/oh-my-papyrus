@@ -26,6 +26,7 @@ EVENTS = {
     "engine_failed",
     "analysis_progress",
     "speech_progress",
+    "model_progress",
 }
 
 

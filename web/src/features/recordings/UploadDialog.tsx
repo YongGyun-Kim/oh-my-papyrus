@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileAudio, Upload, X } from "lucide-react";
 import { api, message } from "../../lib/api";
+import type { InputLimits } from "../../lib/types";
 
 export function UploadDialog({
   onClose,
@@ -12,12 +13,28 @@ export function UploadDialog({
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [name, setName] = useState("");
+  const [limits, setLimits] = useState<InputLimits | null>(null);
   const busy = useRef(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    void api.inputLimits(controller.signal).then(
+      (value) => {
+        if (!controller.signal.aborted) setLimits(value);
+      },
+      (reason) => {
+        if (!controller.signal.aborted) setError(message(reason));
+      },
+    );
+    return () => controller.abort();
+  }, []);
+  const sizeLimit = limits
+    ? `${limits.max_upload_bytes / 1_000_000_000}GB`
+    : "";
   const upload = async (file?: File) => {
-    if (!file || busy.current) return;
+    if (!file || !limits || busy.current) return;
     setError("");
-    if (file.size > 1_000_000_000) {
-      setError("1GB 이하의 파일을 선택해 주세요.");
+    if (file.size > limits.max_upload_bytes) {
+      setError(`${sizeLimit} 이하의 파일을 선택해 주세요.`);
       return;
     }
     if (!file.size) {
@@ -73,18 +90,24 @@ export function UploadDialog({
           <strong>
             {progress === null ? "파일을 선택하거나 여기에 놓으세요" : name}
           </strong>
-          <span>MP3, M4A, WAV, WebM 등 · 최대 2시간 / 1GB</span>
+          <span>
+            {limits
+              ? `MP3, M4A, WAV, WebM 등 · 최대 ${limits.max_duration_ms / 3_600_000}시간 / ${sizeLimit}`
+              : error
+                ? "업로드 한도를 확인하지 못했어요."
+                : "업로드 한도를 확인하고 있어요."}
+          </span>
           <input
             aria-label="녹음 파일"
             type="file"
             accept="audio/*,.mp4,.webm,.m4a,.wav,.mp3,.flac,.ogg,.aiff"
-            disabled={progress !== null}
+            disabled={progress !== null || !limits}
             onChange={(event) => {
               void upload(event.target.files?.[0]);
               event.target.value = "";
             }}
           />
-          {progress === null && (
+          {progress === null && limits && (
             <span className="button secondary">
               <Upload size={16} /> 파일 선택
             </span>

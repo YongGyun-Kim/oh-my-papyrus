@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     data_dir: Path = Path("data")
     models_dir: Path = Path("models")
-    max_upload_bytes: int = 1_000_000_000
+    max_upload_bytes: int = 2_000_000_000
     max_duration_ms: int = 7_200_000
     mode: Mode = "local_only"
     ollama_url: str = "http://127.0.0.1:11434"

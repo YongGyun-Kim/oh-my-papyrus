@@ -1,6 +1,22 @@
 from tests.api_fixtures import populated_client
 
 
+def test_upload_limits_expose_server_configuration(settings):
+    from fastapi.testclient import TestClient
+    from meetinglog.app import create_app
+
+    with TestClient(create_app(settings), base_url="http://localhost:8765") as client:
+        assert client.get("/api/recordings/limits").json() == {
+            "max_upload_bytes": 2_000_000_000,
+            "max_duration_ms": 7_200_000,
+        }
+        settings.max_upload_bytes = 500_000_000
+        assert client.get("/api/recordings/limits").json() == {
+            "max_upload_bytes": 500_000_000,
+            "max_duration_ms": 7_200_000,
+        }
+
+
 def test_alac_upload_plays_as_wav_without_changing_original(settings, db, tmp_path):
     import io
     import subprocess

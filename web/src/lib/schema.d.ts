@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+  "/api/recordings/limits": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Input Limits */
+    get: operations["input_limits_api_recordings_limits_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/recordings/analysis-forms": {
     parameters: {
       query?: never;
@@ -297,6 +314,40 @@ export interface paths {
     patch: operations["update_api_settings_patch"];
     trace?: never;
   };
+  "/api/settings/models/download": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Model Download */
+    get: operations["model_download_api_settings_models_download_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/settings/models/{model}/download": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Prepare Model */
+    post: operations["prepare_model_api_settings_models__model__download_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/settings/cli-connections": {
     parameters: {
       query?: never;
@@ -393,6 +444,20 @@ export interface components {
       open_questions: components["schemas"]["Fact"][];
       /** Actions */
       actions: components["schemas"]["Action"][];
+    };
+    /** AnalysisConnection */
+    AnalysisConnection: {
+      /**
+       * Provider
+       * @enum {string}
+       */
+      provider: "ollama" | "codex" | "claude" | "openai";
+      /** Model */
+      model: string;
+      /** Ready */
+      ready: boolean;
+      /** Status */
+      status: string;
     };
     /** AnalysisOptions */
     AnalysisOptions: {
@@ -605,6 +670,13 @@ export interface components {
       /** Detail */
       detail?: components["schemas"]["ValidationError"][];
     };
+    /** InputLimits */
+    InputLimits: {
+      /** Max Upload Bytes */
+      max_upload_bytes: number;
+      /** Max Duration Ms */
+      max_duration_ms: number;
+    };
     /** Job */
     Job: {
       /** Id */
@@ -652,6 +724,32 @@ export interface components {
        * @enum {string}
        */
       mode: "auto" | "local_only" | "api";
+    };
+    /** ModelDownload */
+    ModelDownload: {
+      /** Model */
+      model?: ("vad" | "asr" | "aligner" | "diarizer") | null;
+      /**
+       * State
+       * @default idle
+       * @enum {string}
+       */
+      state:
+        | "idle"
+        | "queued"
+        | "downloading"
+        | "verifying"
+        | "succeeded"
+        | "failed";
+      /**
+       * Completed
+       * @default 0
+       */
+      completed: number;
+      /** Total */
+      total?: number | null;
+      /** Error Message */
+      error_message?: string | null;
     };
     /** ModelOption */
     ModelOption: {
@@ -741,6 +839,12 @@ export interface components {
       api_configured: boolean;
       /** Media Tools Ready */
       media_tools_ready: boolean;
+      /**
+       * Worker Running
+       * @default false
+       */
+      worker_running: boolean;
+      analysis_connection?: components["schemas"]["AnalysisConnection"] | null;
     };
     /** Recording */
     Recording: {
@@ -910,6 +1014,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  input_limits_api_recordings_limits_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InputLimits"];
+        };
+      };
+    };
+  };
   analysis_forms_api_recordings_analysis_forms_get: {
     parameters: {
       query?: never;
@@ -1539,6 +1663,61 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Readiness"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  model_download_api_settings_models_download_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModelDownload"];
+        };
+      };
+    };
+  };
+  prepare_model_api_settings_models__model__download_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        model: "vad" | "asr" | "aligner" | "diarizer";
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CliLoginInput"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModelDownload"];
         };
       };
       /** @description Validation Error */

@@ -1304,6 +1304,22 @@ h1 {
 .engine-row:last-child {
   border-bottom: 0;
 }
+.model-row {
+  flex-wrap: wrap;
+}
+.engine-row.model-row > div {
+  flex-basis: 220px;
+}
+.model-row .model-download-state {
+  margin-top: 10px;
+}
+.model-row .error {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.model-row .processing-progress {
+  max-width: 480px;
+}
 .cli-row {
   flex-wrap: wrap;
 }

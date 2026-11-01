@@ -102,6 +102,7 @@ export function renderDetailWithFixture(
     engines: [],
     api_configured: false,
     media_tools_ready: true,
+    worker_running: true,
   });
   const view = render(
     <RecordingDetail id="rec-1" onBack={() => {}} onDeleted={() => {}} />,

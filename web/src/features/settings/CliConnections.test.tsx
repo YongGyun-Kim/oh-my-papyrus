@@ -35,6 +35,7 @@ beforeEach(() => {
     mode: "local_only",
     api_configured: false,
     media_tools_ready: true,
+    worker_running: true,
     engines: [],
   });
 });

@@ -1,33 +1,49 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Circle, RefreshCw } from "lucide-react";
 import { api, message } from "../../lib/api";
 import type { Readiness } from "../../lib/types";
 import { AnalysisSettings } from "./AnalysisSettings";
 import { CliConnections } from "./CliConnections";
+import { ModelReadiness } from "./ModelReadiness";
 
-const engineNames: Record<string, string> = {
-  vad: "음성 구간 탐지",
-  asr: "한국어 전사",
-  aligner: "발언 시간 정렬",
-  diarizer: "화자 구분",
-  analysis: "대화 분석",
+const providers = {
+  codex: "Codex",
+  claude: "Claude Code",
+  ollama: "Ollama",
+  openai: "OpenAI API",
 };
+
 export function SettingsPage() {
   const [settings, setSettings] = useState<Readiness | null>(null);
   const [error, setError] = useState("");
   const [refreshCount, setRefreshCount] = useState(0);
-  const refresh = async () => {
-    setRefreshCount((value) => value + 1);
+  const revision = useRef(0);
+  const mounted = useRef(true);
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (!mounted.current) return;
+    const current = ++revision.current;
     try {
-      setSettings(await api.settings());
-      setError("");
+      const next = await api.settings(signal);
+      if (!signal?.aborted && mounted.current && current === revision.current) {
+        setSettings(next);
+        setError("");
+      }
     } catch (reason) {
-      setError(message(reason));
+      if (!signal?.aborted && mounted.current && current === revision.current)
+        setError(message(reason));
     }
-  };
-  useEffect(() => {
-    void refresh();
   }, []);
+  useEffect(() => {
+    mounted.current = true;
+    const controller = new AbortController();
+    void refresh(controller.signal);
+    return () => {
+      mounted.current = false;
+      ++revision.current;
+      controller.abort();
+    };
+  }, [refresh]);
+  const connection = settings?.analysis_connection;
   return (
     <div className="page settings-page">
       <div className="page-heading">
@@ -37,6 +53,7 @@ export function SettingsPage() {
         <button
           className="button secondary"
           onClick={() => {
+            setRefreshCount((value) => value + 1);
             void refresh();
           }}
         >
@@ -49,96 +66,103 @@ export function SettingsPage() {
           {error}
         </p>
       )}
-      <AnalysisSettings refreshCount={refreshCount} />
-      <CliConnections refreshCount={refreshCount} />
-      {settings ? (
+      {settings && (
         <section className="settings-section">
-          <h2>로컬 엔진 준비 상태</h2>
-          <p className="muted settings-description">
-            모델 이름을 누르면 다운로드 페이지로 이동해요. 설치 명령은 서버
-            컴퓨터의 프로젝트 폴더에서 실행해 주세요.
-          </p>
+          <h2>실행 준비 상태</h2>
           <div className="engine-list">
-            {settings.engines.map((engine) => {
-              const name = engineNames[engine.name] ?? engine.name;
-              const analysis = engine.name === "analysis";
-              return (
-                <div
-                  className="engine-row"
-                  role="group"
-                  aria-label={name}
-                  key={engine.name}
-                >
-                  {engine.ready ? (
-                    <CheckCircle2 size={17} />
-                  ) : (
-                    <Circle size={17} />
-                  )}
-                  <div>
-                    <strong>{name}</strong>
+            <div
+              className="engine-row"
+              role="group"
+              aria-label="전사·분석 워커"
+            >
+              {settings.worker_running ? (
+                <CheckCircle2 size={17} />
+              ) : (
+                <Circle size={17} />
+              )}
+              <div>
+                <strong>전사·분석 워커</strong>
+                {!settings.worker_running && (
+                  <div className="model-guide">
                     <small>
-                      <a
-                        href={
-                          analysis
-                            ? `https://ollama.com/library/${engine.repo_id.split(":")[0]}`
-                            : `https://huggingface.co/${engine.repo_id}`
-                        }
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {engine.repo_id}
-                      </a>
+                      서버 컴퓨터의 프로젝트 폴더에서 실행해 주세요.
                     </small>
-                    {!engine.ready && (
-                      <div className="model-guide">
-                        {analysis && (
-                          <small>
-                            Ollama를 실행한 뒤 모델을 다운로드해 주세요.{" "}
-                            <a
-                              href="https://ollama.com/download"
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Ollama 설치
-                            </a>
-                          </small>
-                        )}
-                        <code>
-                          {analysis
-                            ? `ollama pull ${engine.repo_id}`
-                            : `uv run --extra speech meetinglog prepare-models --models ${engine.name}`}
-                        </code>
-                      </div>
-                    )}
+                    <code>uv run --no-sync meetinglog worker</code>
                   </div>
-                  <span className="status">
-                    {engine.ready ? "준비됨" : "준비 필요"}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <p className="help left">
-            {settings.media_tools_ready
-              ? "FFmpeg · FFprobe 준비됨"
-              : "음성 파일을 처리하려면 FFmpeg를 설치해 주세요."}
-          </p>
-          {!settings.media_tools_ready && (
-            <div className="model-guide">
-              <a
-                href="https://formulae.brew.sh/formula/ffmpeg"
-                target="_blank"
-                rel="noreferrer"
-              >
-                FFmpeg 설치 안내
-              </a>
-              <code>brew install ffmpeg</code>
+                )}
+              </div>
+              <span className="status">
+                {settings.worker_running ? "실행 중" : "실행 필요"}
+              </span>
             </div>
-          )}
+            <div
+              className="engine-row"
+              role="group"
+              aria-label="FFmpeg · FFprobe"
+            >
+              {settings.media_tools_ready ? (
+                <CheckCircle2 size={17} />
+              ) : (
+                <Circle size={17} />
+              )}
+              <div>
+                <strong>FFmpeg · FFprobe</strong>
+                {!settings.media_tools_ready && (
+                  <div className="model-guide">
+                    <a
+                      href="https://formulae.brew.sh/formula/ffmpeg"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      FFmpeg 설치 안내
+                    </a>
+                    <code>brew install ffmpeg</code>
+                  </div>
+                )}
+              </div>
+              <span className="status">
+                {settings.media_tools_ready ? "준비됨" : "설치 필요"}
+              </span>
+            </div>
+            {connection && (
+              <div
+                className="engine-row"
+                role="group"
+                aria-label="선택한 분석 도구"
+              >
+                {connection.ready ? (
+                  <CheckCircle2 size={17} />
+                ) : (
+                  <Circle size={17} />
+                )}
+                <div>
+                  <strong>선택한 분석 도구</strong>
+                  <small>
+                    {providers[connection.provider]}
+                    {connection.model ? ` · ${connection.model}` : ""}
+                  </small>
+                  <small>
+                    설정과 인증 상태예요. 실제 모델 응답은 대화 정리를 실행할 때
+                    확인해요.
+                  </small>
+                </div>
+                <span className="status">{connection.status}</span>
+              </div>
+            )}
+          </div>
         </section>
+      )}
+      {settings ? (
+        <ModelReadiness
+          settings={settings}
+          refreshCount={refreshCount}
+          onChanged={refresh}
+        />
       ) : (
         !error && <p className="empty-message">설정을 확인하고 있어요.</p>
       )}
+      <AnalysisSettings refreshCount={refreshCount} onSaved={refresh} />
+      <CliConnections refreshCount={refreshCount} onChange={refresh} />
     </div>
   );
 }

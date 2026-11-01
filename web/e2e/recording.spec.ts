@@ -88,6 +88,113 @@ function wav() {
   return buffer;
 }
 
+test("checks setup readiness and retries model downloads on desktop and mobile", async ({
+  page,
+}) => {
+  let attempts = 0,
+    polls = 0,
+    prepared = false;
+  let download = {
+    model: null as string | null,
+    state: "idle",
+    completed: 0,
+    total: null as number | null,
+    error_message: null as string | null,
+  };
+  await page.route("**/api/settings", async (route) => {
+    const response = await route.fetch();
+    const settings = await response.json();
+    settings.worker_running = true;
+    settings.media_tools_ready = true;
+    settings.engines = [
+      {
+        name: "asr",
+        repo_id: "mlx-community/Qwen3-ASR-1.7B-8bit",
+        ready: true,
+        quality: "unverified",
+      },
+      {
+        name: "vad",
+        repo_id: "mlx-community/silero-vad",
+        ready: prepared,
+        quality: "unverified",
+      },
+    ];
+    await route.fulfill({ response, json: settings });
+  });
+  await page.route("**/api/settings/cli-connections", (route) =>
+    route.fulfill({ json: [] }),
+  );
+  await page.route("**/api/settings/models/download", async (route) => {
+    if (download.state === "downloading" && ++polls >= 3) {
+      if (attempts === 1)
+        download = {
+          ...download,
+          state: "failed",
+          error_message: "모델을 받지 못했어요. 다시 시도해 주세요.",
+        };
+      else {
+        prepared = true;
+        download = { ...download, state: "succeeded", completed: 2 };
+      }
+    }
+    await route.fulfill({ json: download });
+  });
+  await page.route("**/api/settings/models/vad/download", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().postDataJSON()).toEqual({});
+    attempts += 1;
+    polls = 0;
+    download = {
+      model: "vad",
+      state: "downloading",
+      completed: 1,
+      total: 2,
+      error_message: null,
+    };
+    await route.fulfill({ json: download });
+  });
+  await page.goto("/#settings");
+  await expect(
+    page.getByRole("group", { name: "전사·분석 워커" }).getByText("실행 중"),
+  ).toBeVisible();
+  const vad = page.getByRole("group", { name: "음성 구간 탐지", exact: true });
+  await vad.getByRole("button", { name: "다운로드", exact: true }).click();
+  await expect(vad.getByRole("progressbar")).toHaveAttribute("value", "1");
+  await expect(vad.getByText("50% · 1/2 파일")).toBeVisible();
+  await page.screenshot({
+    path: "test-results/model-download-desktop.png",
+    fullPage: true,
+  });
+  await expect(vad.getByRole("alert")).toHaveText(
+    "모델을 받지 못했어요. 다시 시도해 주세요.",
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await vad
+    .getByRole("button", { name: "다시 시도", exact: true })
+    .scrollIntoViewIfNeeded();
+  expect(
+    (await vad.locator(":scope > div").first().boundingBox())!.width,
+  ).toBeGreaterThan(200);
+  await page.screenshot({
+    path: "test-results/model-download-mobile.png",
+    fullPage: true,
+  });
+  await vad.getByRole("button", { name: "다시 시도", exact: true }).click();
+  await page.reload();
+  await expect(vad.getByRole("progressbar")).toHaveAttribute("value", "1");
+  await expect(vad.getByText("준비됨", { exact: true })).toBeVisible();
+  await expect(
+    vad.getByRole("button", { name: "다시 다운로드", exact: true }),
+  ).toBeEnabled();
+  expect(attempts).toBe(2);
+});
+
 test("shows speech processing steps and progress on desktop and mobile", async ({
   page,
 }) => {

@@ -36,6 +36,37 @@ output.write_text('{}')
     assert time.monotonic() - started > 0.35
 
 
+def test_model_download_cancel_does_not_wait_for_an_active_inference(settings, tmp_path):
+    from meetinglog.jobs.locks import inference_lock
+    from meetinglog.jobs.process import ProcessRunner
+
+    request = StageRequest(
+        job_id="model",
+        recording_id="",
+        generation=0,
+        stage="models",
+        input_path="",
+        output_path=str(tmp_path / "model.json"),
+        mode="local_only",
+        model_name="vad",
+    )
+    started = time.monotonic()
+    runner = ProcessRunner(
+        lambda request: [
+            sys.executable,
+            "-c",
+            "raise AssertionError('must not run while inference is active')",
+        ],
+        env={"MEETINGLOG_DATA_DIR": str(settings.data_dir)},
+        cancelled=lambda: time.monotonic() - started > 0.25,
+    )
+    with inference_lock(settings):
+        with pytest.raises(ApiError) as error:
+            runner.run(request, timeout_s=None)
+    assert error.value.code == "job_cancelled"
+    assert time.monotonic() - started < 2
+
+
 @pytest.mark.parametrize("stage", ["speech", "analysis"])
 def test_timeout_terminates_sleeping_inference_process(tmp_path, stage):
     from meetinglog.jobs.process import ProcessRunner

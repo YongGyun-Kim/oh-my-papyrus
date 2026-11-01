@@ -1,6 +1,7 @@
 import type { components } from "./schema";
 
 export type Recording = components["schemas"]["Recording"];
+export type InputLimits = components["schemas"]["InputLimits"];
 export type RecordingSummary = components["schemas"]["RecordingSummary"];
 export type RecordingDetail = components["schemas"]["RecordingDetail"];
 export type Transcript = components["schemas"]["Transcript"];
@@ -8,6 +9,8 @@ export type Turn = components["schemas"]["Turn"];
 export type Speaker = components["schemas"]["Speaker"];
 export type Job = components["schemas"]["Job"];
 export type Readiness = components["schemas"]["Readiness"];
+export type ModelDownload = components["schemas"]["ModelDownload"];
+export type SpeechModel = NonNullable<ModelDownload["model"]>;
 export type Mode = Readiness["mode"];
 export type CliConnection = components["schemas"]["CliConnection"];
 export type CliProvider = CliConnection["provider"];

@@ -23,24 +23,34 @@ const labels: Record<CliConnection["state"], string> = {
   error: "확인 필요",
 };
 
-export function CliConnections({ refreshCount }: { refreshCount: number }) {
+export function CliConnections({
+  refreshCount,
+  onChange,
+}: {
+  refreshCount: number;
+  onChange?: () => void;
+}) {
   const [connections, setConnections] = useState<CliConnection[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<CliProvider | null>(null);
   const revision = useRef(0);
-  const load = useCallback(async (signal?: AbortSignal) => {
-    const current = ++revision.current;
-    try {
-      const result = await api.cliConnections(signal);
-      if (!signal?.aborted && current === revision.current) {
-        setConnections(result);
-        setError("");
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      const current = ++revision.current;
+      try {
+        const result = await api.cliConnections(signal);
+        if (!signal?.aborted && current === revision.current) {
+          setConnections(result);
+          setError("");
+          onChange?.();
+        }
+      } catch (reason) {
+        if (!signal?.aborted && current === revision.current)
+          setError(message(reason));
       }
-    } catch (reason) {
-      if (!signal?.aborted && current === revision.current)
-        setError(message(reason));
-    }
-  }, []);
+    },
+    [onChange],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -79,6 +89,7 @@ export function CliConnections({ refreshCount }: { refreshCount: number }) {
           null,
       );
       setError("");
+      onChange?.();
     } catch (reason) {
       setError(message(reason));
     } finally {

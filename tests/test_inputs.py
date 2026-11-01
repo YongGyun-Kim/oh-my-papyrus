@@ -48,6 +48,36 @@ def test_stream_size_limit_is_enforced(input_service):
     assert error.value.status == 413
 
 
+@pytest.mark.parametrize("configured_limit,limit", [(None, 2_000_000_000), (5, 5)])
+def test_upload_accepts_exact_limit_and_rejects_next_byte(
+    input_service, db, configured_limit, limit
+):
+    if configured_limit is not None:
+        input_service.settings.max_upload_bytes = configured_limit
+    recording = input_service.create("file", "용량 경계")
+    with db.session() as connection:
+        connection.execute(
+            "UPDATE recordings SET byte_count=? WHERE id=?", (limit - 3, recording.id)
+        )
+    input_service.append_chunk(recording.id, 0, b"123")
+    with pytest.raises(ApiError) as caught:
+        input_service.append_chunk(recording.id, 1, b"4")
+    assert caught.value.status == 413
+    with db.session() as connection:
+        assert (
+            connection.execute(
+                "SELECT byte_count FROM recordings WHERE id=?", (recording.id,)
+            ).fetchone()[0]
+            == limit
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM chunks WHERE recording_id=?", (recording.id,)
+            ).fetchone()[0]
+            == 1
+        )
+
+
 def test_valid_chunks_finalize_idempotently(input_service, tmp_path):
     audio = write_silence(tmp_path / "chunk.wav").read_bytes()
     recording = input_service.create("microphone", "녹음")

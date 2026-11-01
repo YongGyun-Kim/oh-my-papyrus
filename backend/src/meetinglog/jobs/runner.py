@@ -1,5 +1,4 @@
 import fcntl
-import sys
 import threading
 from pathlib import Path
 
@@ -7,7 +6,8 @@ from meetinglog.analysis.settings import saved_analysis_settings
 from meetinglog.config import Settings
 from meetinglog.db import ApiError, Database, require_recording
 from meetinglog.domain import Job, SpeechResult, StageRequest, new_id
-from meetinglog.jobs.process import ProcessRunner
+from meetinglog.jobs.locks import inference_lock
+from meetinglog.jobs.process import ProcessRunner, local_command
 from meetinglog.jobs.repository import JobRepository
 from meetinglog.recordings.storage import Storage, atomic_json
 from meetinglog.transcripts.repository import TranscriptRepository
@@ -17,7 +17,7 @@ class Worker:
     def __init__(self, settings: Settings, db: Database, stage_command=None):
         self.settings, self.db = settings, db
         self.repository = JobRepository(db)
-        self.stage_command = stage_command or self.command
+        self.stage_command = stage_command or local_command
         self.uses_default_executor = stage_command is None
         self.stop = threading.Event()
         self.lock = None
@@ -60,11 +60,6 @@ class Worker:
             fcntl.flock(self.lock, fcntl.LOCK_UN)
             self.lock.close()
             self.lock = None
-
-    def command(self, request: StageRequest) -> list[str]:
-        path = Path(request.output_path).with_suffix(".request.json")
-        atomic_json(path, request.model_dump())
-        return [sys.executable, "-m", "meetinglog.engines.local_executor", str(path)]
 
     def _speech(self, job: Job, artifact: str):
         speech = SpeechResult.model_validate_json(Path(artifact).read_text())
@@ -165,6 +160,13 @@ class Worker:
     def run_once(self) -> bool:
         if self.lock is None:
             raise RuntimeError("Worker must hold its singleton lock")
+        try:
+            with inference_lock(self.settings, blocking=False):
+                return self._run_once()
+        except BlockingIOError:
+            return False
+
+    def _run_once(self) -> bool:
         from meetinglog.recordings.deletion import DeletionService
 
         DeletionService(self.settings, self.db).cleanup_pending()

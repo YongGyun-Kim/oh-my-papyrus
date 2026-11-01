@@ -8,12 +8,14 @@ from fastapi.responses import JSONResponse
 from meetinglog.cli_auth import CliAuth
 from meetinglog.config import Settings
 from meetinglog.db import ApiError, Database
+from meetinglog.model_preparation import ModelPreparation
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     db = Database(settings.database_path)
     cli_auth = CliAuth()
+    model_preparation = ModelPreparation(settings)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -21,11 +23,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            model_preparation.close()
             cli_auth.close()
 
     app = FastAPI(title="Meetinglog", version="0.1.0", lifespan=lifespan)
     app.state.settings, app.state.db = settings, db
     app.state.cli_auth = cli_auth
+    app.state.model_preparation = model_preparation
     from meetinglog.recordings.api import router as input_router
 
     app.include_router(input_router)

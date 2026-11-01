@@ -77,8 +77,22 @@ class AnalyzeInput(ProcessingInput):
     form: AnalysisForm
 
 
+class InputLimits(Contract):
+    max_upload_bytes: int
+    max_duration_ms: int
+
+
 def service(request: Request) -> InputService:
     return InputService(request.app.state.settings, request.app.state.db)
+
+
+@router.get("/limits", response_model=InputLimits)
+def input_limits(request: Request):
+    settings = request.app.state.settings
+    return InputLimits(
+        max_upload_bytes=settings.max_upload_bytes,
+        max_duration_ms=settings.max_duration_ms,
+    )
 
 
 @router.get("/analysis-forms", response_model=list[FormOption])

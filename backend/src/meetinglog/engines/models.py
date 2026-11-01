@@ -52,8 +52,23 @@ class ModelRegistry:
                 503,
             ) from error
 
-    def prepare(self, names: list[str]) -> None:
+    def prepare(self, names: list[str], *, progress=None, force_download=False) -> None:
         from huggingface_hub import HfApi, snapshot_download
+
+        progress_class = None
+        if progress:
+            from tqdm.auto import tqdm
+
+            class Progress(tqdm):
+                def __init__(self, *args, **kwargs):
+                    kwargs["disable"] = False
+                    super().__init__(*args, **kwargs)
+
+                def display(self, *args, **kwargs):
+                    if self.unit == "it":
+                        progress(int(self.n), int(self.total) if self.total else None)
+
+            progress_class = Progress
 
         self.root.mkdir(parents=True, exist_ok=True)
         manifest = self.read()
@@ -63,11 +78,22 @@ class ModelRegistry:
             repo = self.repositories[name]
             revision = HfApi().model_info(repo).sha
             path = self.root / name
+            replace = force_download
+            if name in manifest["models"]:
+                try:
+                    self.require(name)
+                except ApiError:
+                    replace = True
+            # 파일 교체가 끝나기 전에는 이전 manifest를 준비 완료로 사용하지 않는다.
+            manifest["models"].pop(name, None)
+            atomic_json(self.manifest, manifest)
             print(f"Preparing {name}: {repo} @ {revision}", flush=True)
             snapshot_download(
                 repo,
                 revision=revision,
                 local_dir=path,
+                force_download=replace,
+                **({"tqdm_class": progress_class} if progress_class else {}),
                 allow_patterns=[
                     "*.json",
                     "*.safetensors",

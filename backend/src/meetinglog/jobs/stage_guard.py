@@ -18,6 +18,10 @@ def main():
     control = int(sys.argv[1])
     lock_path = Path(sys.argv[2])
     workspace = Path(sys.argv[3])
+    command = sys.argv[4:]
+    exclusive = command[0] == "--exclusive"
+    if exclusive:
+        command = command[1:]
     stopping = False
 
     def stop(*_):
@@ -33,12 +37,18 @@ def main():
 
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_SH)
+        while True:
+            try:
+                fcntl.flock(lock, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if stopping or parent_gone(0.05):
+                    return 1
         if stopping or parent_gone():
             return 1
         workspace.mkdir(parents=True, exist_ok=True)
         try:
-            engine = subprocess.Popen(sys.argv[4:], start_new_session=True)
+            engine = subprocess.Popen(command, start_new_session=True)
         except BaseException:
             shutil.rmtree(workspace, ignore_errors=True)
             os.close(control)

@@ -54,6 +54,19 @@ def test_second_worker_cannot_modify_running_job(jobs, settings):
         assert repository.get(running.id).state == "running"
 
 
+def test_model_preparation_keeps_jobs_queued_until_its_lock_is_released(jobs, settings):
+    from meetinglog.jobs.locks import inference_lock
+    from meetinglog.jobs.runner import Worker
+
+    repository, recording = jobs
+    job = repository.enqueue(recording.id, "process", None, "local_only")
+    with Worker(settings, repository.db) as worker:
+        with inference_lock(settings, exclusive=True):
+            assert worker.run_once() is False
+            assert repository.get(job.id).state == "queued"
+        assert repository.claim().id == job.id
+
+
 def test_deleted_generation_rejects_late_stage(jobs):
     repository, recording = jobs
     job = repository.enqueue(recording.id, "process", None, "local_only")

@@ -22,8 +22,11 @@ def main():
         print(json.dumps(create_app().openapi(), ensure_ascii=False))
     elif args.command == "prepare-models":
         from meetinglog.engines.models import ModelRegistry
+        from meetinglog.jobs.locks import inference_lock
 
-        ModelRegistry(Settings()).prepare(args.models)
+        settings = Settings()
+        with inference_lock(settings, exclusive=True):
+            ModelRegistry(settings).prepare(args.models)
     elif args.command == "evaluate":
         from meetinglog.evaluation import evaluate_manifest
         from meetinglog.recordings.storage import atomic_json

@@ -9,6 +9,13 @@ from pathlib import Path
 
 from meetinglog.db import ApiError
 from meetinglog.domain import StageRequest, StageResult
+from meetinglog.recordings.storage import atomic_json
+
+
+def local_command(request: StageRequest) -> list[str]:
+    path = Path(request.output_path).with_suffix(".request.json")
+    atomic_json(path, request.model_dump())
+    return [sys.executable, "-m", "meetinglog.engines.local_executor", str(path)]
 
 
 def terminate(child: subprocess.Popen):
@@ -39,7 +46,7 @@ class ProcessRunner:
         self.env = env or {}
         self.on_event = on_event or (lambda *args: None)
 
-    def run(self, request: StageRequest, timeout_s: float) -> StageResult:
+    def run(self, request: StageRequest, timeout_s: float | None) -> StageResult:
         output = Path(request.output_path)
         output.parent.mkdir(parents=True, exist_ok=True)
         output.unlink(missing_ok=True)
@@ -64,8 +71,8 @@ class ProcessRunner:
         environment = {
             **os.environ,
             **self.env,
-            "HF_HUB_OFFLINE": "1",
-            "TRANSFORMERS_OFFLINE": "1",
+            "HF_HUB_OFFLINE": "0" if request.stage == "models" else "1",
+            "TRANSFORMERS_OFFLINE": "0" if request.stage == "models" else "1",
             "TOKENIZERS_PARALLELISM": "false",
         }
         last_heartbeat = 0.0
@@ -81,6 +88,7 @@ class ProcessRunner:
                         str(control),
                         str(ownership_lock),
                         str(output.with_suffix(".workspace")),
+                        *(["--exclusive"] if request.stage == "models" else []),
                         *self.command(request),
                     ],
                     start_new_session=True,
@@ -99,7 +107,7 @@ class ProcessRunner:
                     consume_events()
                     if self.cancelled():
                         raise ApiError("job_cancelled", "작업이 취소되었습니다", 409)
-                    if time.monotonic() - progressed > timeout_s:
+                    if timeout_s is not None and time.monotonic() - progressed > timeout_s:
                         raise ApiError(
                             "stage_timeout",
                             "처리 시간을 초과했습니다. 다시 시도하거나 처리 방식을 변경하세요",

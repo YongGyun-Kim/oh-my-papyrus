@@ -6,6 +6,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 Mode = Literal["auto", "local_only", "api"]
 AnalysisForm = Literal["meeting", "interview", "project", "decision", "progress"]
+SpeechModel = Literal["vad", "asr", "aligner", "diarizer"]
 
 
 def now() -> datetime:
@@ -276,6 +277,7 @@ class StageRequest(Contract):
     mode: Mode
     form: AnalysisForm = "meeting"
     analysis_settings: AnalysisSettings | None = None
+    model_name: SpeechModel | None = None
 
 
 class StageResult(Contract):

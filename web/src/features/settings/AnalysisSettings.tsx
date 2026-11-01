@@ -22,7 +22,13 @@ const levels: Record<string, string> = {
   ultra: "Ultra",
 };
 
-export function AnalysisSettings({ refreshCount }: { refreshCount: number }) {
+export function AnalysisSettings({
+  refreshCount,
+  onSaved,
+}: {
+  refreshCount: number;
+  onSaved?: () => void;
+}) {
   const [saved, setSaved] = useState<AnalysisPreferences | null>(null);
   const [draft, setDraft] = useState<AnalysisPreferences | null>(null);
   const [options, setOptions] = useState<AnalysisOptions | null>(null);
@@ -102,6 +108,7 @@ export function AnalysisSettings({ refreshCount }: { refreshCount: number }) {
       setSaved(result);
       setDraft(result);
       setStatus("설정을 저장했어요. 다음 분석부터 적용해요.");
+      onSaved?.();
     } catch (reason) {
       setError(message(reason));
     } finally {

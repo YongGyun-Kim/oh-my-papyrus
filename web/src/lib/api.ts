@@ -7,7 +7,10 @@ import type {
   Job,
   Mode,
   Readiness,
+  ModelDownload,
+  SpeechModel,
   Recording,
+  InputLimits,
   RecordingDetail,
   RecordingSummary,
   Transcript,
@@ -56,6 +59,8 @@ const json = (method: string, body: unknown): RequestInit => ({
 const path = (id: string) => `/recordings/${encodeURIComponent(id)}`;
 
 export const api = {
+  inputLimits: (signal?: AbortSignal) =>
+    request<InputLimits>("/recordings/limits", { signal }),
   listRecordings: async (signal?: AbortSignal) =>
     (await request<{ items: RecordingSummary[] }>("/recordings", { signal }))
       .items,
@@ -127,7 +132,15 @@ export const api = {
       json("PATCH", body),
     ),
   forms: () => request<FormOption[]>("/recordings/analysis-forms"),
-  settings: () => request<Readiness>("/settings"),
+  settings: (signal?: AbortSignal) =>
+    request<Readiness>("/settings", { signal }),
+  modelDownload: (signal?: AbortSignal) =>
+    request<ModelDownload>("/settings/models/download", { signal }),
+  prepareModel: (model: SpeechModel) =>
+    request<ModelDownload>(
+      `/settings/models/${model}/download`,
+      json("POST", {}),
+    ),
   cliConnections: (signal?: AbortSignal) =>
     request<CliConnection[]>("/settings/cli-connections", { signal }),
   loginCli: (provider: CliProvider) =>
